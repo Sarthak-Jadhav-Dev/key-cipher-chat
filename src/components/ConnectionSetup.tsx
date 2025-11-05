@@ -10,14 +10,20 @@ interface ConnectionSetupProps {
   isCreator: boolean;
   onConnectionEstablished: (offer?: string, answer?: string) => void;
   offer?: string;
+  answer?: string;
 }
 
-const ConnectionSetup = ({ isCreator, onConnectionEstablished, offer }: ConnectionSetupProps) => {
+const ConnectionSetup = ({ isCreator, onConnectionEstablished, offer, answer }: ConnectionSetupProps) => {
   const [offerSdp, setOfferSdp] = useState(offer || '');
-  const [answerSdp, setAnswerSdp] = useState('');
+  const [answerSdp, setAnswerSdp] = useState(answer || '');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  // Update answer when it's generated
+  if (answer && answer !== answerSdp && !isCreator) {
+    setAnswerSdp(answer);
+  }
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

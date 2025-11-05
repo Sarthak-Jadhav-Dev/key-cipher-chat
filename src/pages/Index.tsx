@@ -151,7 +151,8 @@ const Index = () => {
           <ConnectionSetup 
             isCreator={isCreator}
             onConnectionEstablished={handleConnectionEstablished}
-            offer={connectionOffer}
+            offer={isCreator ? connectionOffer : undefined}
+            answer={!isCreator ? connectionOffer : undefined}
           />
         );
       
