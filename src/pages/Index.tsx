@@ -17,6 +17,7 @@ const Index = () => {
   const [peerRole, setPeerRole] = useState<Role>(null);
   const [connection, setConnection] = useState<WebRTCConnection | null>(null);
   const [connectionOffer, setConnectionOffer] = useState('');
+  const [isDataChannelReady, setIsDataChannelReady] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -37,6 +38,13 @@ const Index = () => {
     const rtcConn = new WebRTCConnection();
     setConnection(rtcConn);
 
+    // Set up message handler early
+    rtcConn.onMessage((data) => {
+      if (data.type === 'role_selected') {
+        setPeerRole(data.role);
+      }
+    });
+
     rtcConn.onConnectionStateChange((state) => {
       console.log('Connection state:', state);
       if (state === 'connected') {
@@ -50,6 +58,10 @@ const Index = () => {
     if (creator) {
       // Creator creates data channel and offer
       rtcConn.createDataChannel('bb84-channel');
+      rtcConn.onDataChannelOpen(() => {
+        console.log('Data channel opened');
+        setIsDataChannelReady(true);
+      });
       const offer = await rtcConn.createOffer();
       setConnectionOffer(offer);
       setAppState('connection-setup');
@@ -57,6 +69,7 @@ const Index = () => {
       // Joiner waits for offer
       rtcConn.onDataChannel(() => {
         console.log('Data channel received');
+        setIsDataChannelReady(true);
       });
       setAppState('connection-setup');
     }
@@ -94,19 +107,17 @@ const Index = () => {
     setMyRole(role);
     
     // Send role selection to peer
-    if (connection) {
+    if (connection && isDataChannelReady) {
       connection.sendMessage({
         type: 'role_selected',
         role: role
       });
-    }
-
-    // Set up message handler
-    if (connection) {
-      connection.onMessage((data) => {
-        if (data.type === 'role_selected') {
-          setPeerRole(data.role);
-        }
+    } else {
+      console.warn('Data channel not ready, cannot send role');
+      toast({
+        title: "Connection Not Ready",
+        description: "Please wait for the connection to establish",
+        variant: "destructive",
       });
     }
   };
@@ -150,6 +161,7 @@ const Index = () => {
             onRoleSelected={handleRoleSelected}
             aliceTaken={myRole === 'alice' || peerRole === 'alice'}
             bobTaken={myRole === 'bob' || peerRole === 'bob'}
+            isReady={isDataChannelReady}
           />
         );
       

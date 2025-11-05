@@ -8,12 +8,14 @@ interface RoleSelectionProps {
   onRoleSelected: (role: Role) => void;
   aliceTaken: boolean;
   bobTaken: boolean;
+  isReady?: boolean;
 }
 
-const RoleSelection = ({ onRoleSelected, aliceTaken, bobTaken }: RoleSelectionProps) => {
+const RoleSelection = ({ onRoleSelected, aliceTaken, bobTaken, isReady = true }: RoleSelectionProps) => {
   const [selectedRole, setSelectedRole] = useState<Role>(null);
 
   const handleSelectRole = (role: Role) => {
+    if (!isReady) return;
     setSelectedRole(role);
     if (role) {
       onRoleSelected(role);
@@ -93,11 +95,21 @@ const RoleSelection = ({ onRoleSelected, aliceTaken, bobTaken }: RoleSelectionPr
             </Card>
           </div>
 
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground text-center">
-              Waiting for both roles to be selected before starting the protocol...
-            </p>
-          </div>
+          {!isReady && (
+            <div className="mt-6 p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground text-center">
+                Waiting for connection to establish...
+              </p>
+            </div>
+          )}
+          
+          {isReady && (
+            <div className="mt-6 p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground text-center">
+                Waiting for both roles to be selected before starting the protocol...
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

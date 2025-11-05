@@ -3,6 +3,7 @@ export class WebRTCConnection {
   private dc: RTCDataChannel | null = null;
   private onMessageCallback: ((data: any) => void) | null = null;
   private onConnectionStateCallback: ((state: RTCPeerConnectionState) => void) | null = null;
+  private onDataChannelOpenCallback: (() => void) | null = null;
 
   constructor() {
     this.pc = new RTCPeerConnection({
@@ -52,6 +53,9 @@ export class WebRTCConnection {
 
     this.dc.onopen = () => {
       console.log('Data channel opened');
+      if (this.onDataChannelOpenCallback) {
+        this.onDataChannelOpenCallback();
+      }
     };
 
     this.dc.onclose = () => {
@@ -134,6 +138,10 @@ export class WebRTCConnection {
 
   onConnectionStateChange(callback: (state: RTCPeerConnectionState) => void): void {
     this.onConnectionStateCallback = callback;
+  }
+
+  onDataChannelOpen(callback: () => void): void {
+    this.onDataChannelOpenCallback = callback;
   }
 
   getConnectionState(): RTCPeerConnectionState {
