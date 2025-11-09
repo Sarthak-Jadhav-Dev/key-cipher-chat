@@ -11,9 +11,10 @@ interface ConnectionSetupProps {
   onConnectionEstablished: (offer?: string, answer?: string) => void;
   offer?: string;
   answer?: string;
+  onContinue?: () => void;
 }
 
-const ConnectionSetup = ({ isCreator, onConnectionEstablished, offer, answer }: ConnectionSetupProps) => {
+const ConnectionSetup = ({ isCreator, onConnectionEstablished, offer, answer, onContinue }: ConnectionSetupProps) => {
   const [offerSdp, setOfferSdp] = useState(offer || '');
   const [answerSdp, setAnswerSdp] = useState(answer || '');
   const [copied, setCopied] = useState(false);
@@ -149,36 +150,47 @@ const ConnectionSetup = ({ isCreator, onConnectionEstablished, offer, answer }: 
               </Button>
 
               {answerSdp && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Connection Answer (Share this back)</Label>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => copyToClipboard(answerSdp)}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-4 w-4 mr-2" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copy
-                        </>
-                      )}
-                    </Button>
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Connection Answer (Share this back)</Label>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => copyToClipboard(answerSdp)}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-4 w-4 mr-2" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <Textarea 
+                      value={answerSdp}
+                      readOnly
+                      className="font-mono text-xs h-32"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Send this answer back to your peer to complete the connection
+                    </p>
                   </div>
-                  <Textarea 
-                    value={answerSdp}
-                    readOnly
-                    className="font-mono text-xs h-32"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Send this answer back to your peer to complete the connection
-                  </p>
-                </div>
+                  
+                  <Button 
+                    onClick={onContinue}
+                    className="w-full"
+                    size="lg"
+                    variant="default"
+                  >
+                    Continue to Role Selection
+                  </Button>
+                </>
               )}
             </>
           )}

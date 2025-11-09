@@ -3,6 +3,7 @@ import { Role } from '@/types/quantum';
 import RoomSetup from '@/components/RoomSetup';
 import RoleSelection from '@/components/RoleSelection';
 import ConnectionSetup from '@/components/ConnectionSetup';
+import BB84Protocol from '@/components/BB84Protocol';
 import { WebRTCConnection } from '@/utils/webrtc';
 import { useToast } from '@/hooks/use-toast';
 
@@ -87,11 +88,7 @@ const Index = () => {
         // Joiner receives offer and generates answer
         const generatedAnswer = await connection.handleOffer(offer);
         setConnectionOffer(generatedAnswer);
-        // Show the answer to user to send back
-        // For now, auto-proceed (in real app, wait for confirmation)
-        setTimeout(() => {
-          setAppState('role-selection');
-        }, 2000);
+        // Answer is displayed, user must manually continue
       }
     } catch (error) {
       console.error('Connection error:', error);
@@ -153,6 +150,7 @@ const Index = () => {
             onConnectionEstablished={handleConnectionEstablished}
             offer={isCreator ? connectionOffer : undefined}
             answer={!isCreator ? connectionOffer : undefined}
+            onContinue={() => setAppState('role-selection')}
           />
         );
       
@@ -167,19 +165,8 @@ const Index = () => {
         );
       
       case 'protocol':
-        return (
-          <div className="min-h-screen flex items-center justify-center p-4 gradient-panel">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold mb-4">BB84 Protocol</h1>
-              <p className="text-xl text-muted-foreground mb-4">
-                You are: <span className="font-bold capitalize">{myRole}</span>
-              </p>
-              <p className="text-muted-foreground">
-                Protocol interface coming soon...
-              </p>
-            </div>
-          </div>
-        );
+        if (!connection || !myRole) return null;
+        return <BB84Protocol role={myRole} connection={connection} />;
       
       default:
         return null;

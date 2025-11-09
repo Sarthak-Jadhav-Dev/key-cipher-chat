@@ -8,29 +8,29 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 210 30% 98%;
-    --foreground: 210 20% 12%;
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 210 20% 12%;
+    --card: 224 71% 9%;
+    --card-foreground: 213 31% 91%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 210 20% 12%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
 
-    --primary: 195 85% 45%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 262 100% 70%;
+    --primary-foreground: 262 84% 15%;
 
-    --secondary: 180 65% 50%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 213 31% 91%;
 
-    --muted: 210 25% 92%;
-    --muted-foreground: 210 15% 45%;
+    --muted: 215 28% 17%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 190 75% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 215 28% 17%;
+    --accent-foreground: 213 31% 91%;
 
-    --destructive: 0 75% 55%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 213 31% 91%;
 
     --success: 145 65% 45%;
     --success-foreground: 0 0% 100%;
@@ -38,11 +38,11 @@ All colors MUST be HSL.
     --warning: 35 85% 55%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 210 20% 88%;
-    --input: 210 20% 88%;
-    --ring: 195 85% 45%;
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 262 100% 70%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     --quantum-alice: 200 100% 65%;
     --quantum-bob: 180 80% 55%;
@@ -56,29 +56,29 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 210 40% 8%;
-    --foreground: 210 15% 92%;
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
 
-    --card: 210 35% 12%;
-    --card-foreground: 210 15% 92%;
+    --card: 224 71% 9%;
+    --card-foreground: 213 31% 91%;
 
-    --popover: 210 35% 12%;
-    --popover-foreground: 210 15% 92%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
 
-    --primary: 195 85% 55%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 262 100% 70%;
+    --primary-foreground: 262 84% 15%;
 
-    --secondary: 180 65% 50%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 213 31% 91%;
 
-    --muted: 210 30% 18%;
-    --muted-foreground: 210 15% 65%;
+    --muted: 215 28% 17%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 190 75% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 215 28% 17%;
+    --accent-foreground: 213 31% 91%;
 
-    --destructive: 0 75% 55%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 213 31% 91%;
 
     --success: 145 65% 50%;
     --success-foreground: 0 0% 100%;
@@ -86,9 +86,9 @@ All colors MUST be HSL.
     --warning: 35 85% 60%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 210 25% 22%;
-    --input: 210 25% 22%;
-    --ring: 195 85% 55%;
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 262 100% 70%;
 
     --quantum-alice: 200 100% 70%;
     --quantum-bob: 180 80% 60%;

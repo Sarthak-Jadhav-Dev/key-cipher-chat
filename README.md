@@ -1,4 +1,84 @@
-# Welcome to your Lovable project
+# Key Cipher Chat - BB84 Quantum Key Distribution
+
+A web application that simulates the BB84 Quantum Key Distribution protocol between two peers, enabling secure key exchange and encrypted chat communication.
+
+## 🔐 Features
+
+- **Room-based Sessions**: Create or join secure rooms with passcode authentication
+- **WebRTC P2P**: Direct peer-to-peer connection with authenticated classical channel
+- **Role Selection**: Choose between Alice (sender) or Bob (receiver)
+- **BB84 Protocol**: Complete implementation with all steps:
+  - Quantum state preparation and measurement
+  - Basis sifting
+  - QBER (Quantum Bit Error Rate) estimation
+  - Error correction
+  - Privacy amplification
+- **Quantum Backends**: Choose between Qiskit-style or PennyLane-style simulation
+- **Eavesdropper Mode**: Simulate Eve's intercept-measure-resend attack
+- **Encrypted Chat**: 2-minute time-boxed chat using the derived quantum key
+
+## 📖 Documentation
+
+See [BB84_IMPLEMENTATION.md](./BB84_IMPLEMENTATION.md) for detailed protocol documentation.
+
+## 🚀 Quick Start
+
+### Running the Application
+
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Start development server**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Open in browser**: Navigate to `http://localhost:8080`
+
+### Using the Protocol
+
+1. **Create a Room** (Peer 1 - Alice):
+   - Click "Create Room"
+   - Set a passcode
+   - Copy the invitation offer
+   - Send to Peer 2
+
+2. **Join the Room** (Peer 2 - Bob):
+   - Click "Join Room"
+   - Enter Room ID and passcode
+   - Paste the invitation offer
+   - Click "Generate Answer"
+   - Copy the answer and send back to Peer 1
+
+3. **Complete Connection** (Peer 1):
+   - Paste the answer from Peer 2
+   - Click "Complete Connection"
+
+4. **Select Roles**:
+   - Each peer selects Alice or Bob (must be different)
+
+5. **Run BB84 Protocol**:
+   - **Alice**: Click "Prepare & Send Qubits"
+   - **Bob**: Click "Measure Qubits"
+   - **Both**: Click "Sifting" to exchange bases
+   - **Alice**: Click "QBER Check" to estimate error rate
+   - **Both**: Click "Error Correction" to synchronize keys
+   - **Both**: Click "Privacy Amplification" to compress key
+   - Keys are verified automatically
+
+6. **Secure Chat**:
+   - Chat opens automatically after successful key exchange
+   - 2-minute time limit
+   - All messages encrypted with quantum-derived key
+
+### Testing Eavesdropper Detection
+
+1. Enable "Enable Eve" toggle before starting protocol
+2. Follow normal protocol steps
+3. QBER will be elevated (~25%)
+4. Protocol will abort with "QBER too high" error
 
 ## Project info
 
