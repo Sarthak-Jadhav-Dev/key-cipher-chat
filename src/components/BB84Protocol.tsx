@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +30,7 @@ import SecureChat from './SecureChat';
 import Qubit from './Qubit';
 import SiftedQubitDisplay from './SiftedQubitDisplay';
 import AnimatedCounter from './AnimatedCounter';
+import { Link } from 'react-router-dom';
 
 interface BB84ProtocolProps {
   role: Role;
@@ -45,6 +46,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
     backend: 'qiskit',
     eveEnabled: false,
   });
+  const configRef = useRef(config);
 
   const [state, setState] = useState<ProtocolState>({
     step: 'idle',
@@ -61,14 +63,31 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
     finalKey: [],
     abortReason: null,
   });
+  const stateRef = useRef(state);
+  const toastRef = useRef(toast);
 
   const [simulator] = useState(() => new QuantumSimulator(config.backend));
   const [loading, setLoading] = useState(false);
   const [peerReady, setPeerReady] = useState(false);
+  const [hasSentBases, setHasSentBases] = useState(false);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
 
   // Handle incoming messages
   useEffect(() => {
     const handleMessage = (data: BB84Message) => {
+      const currentState = stateRef.current;
+      const currentConfig = configRef.current;
       console.log('Received BB84 message:', data.type);
 
       switch (data.type) {
@@ -76,8 +95,8 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
           if (role === 'bob') {
             setState(prev => ({
               ...prev,
-              aliceBits: data.aliceBits,
-              aliceBases: data.aliceBases,
+              aliceBits: data.aliceBits, // Store for measurement comparison
+              aliceBases: data.aliceBases, // Store for measurement comparison
             }));
             setPeerReady(true);
             toast({
@@ -95,27 +114,118 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
           break;
 
         case 'announce_bases':
-          handleBasesReceived(data.bases);
+          // Received bases from peer, now perform sifting
+          setHasSentBases(prev => {
+            // If we haven't sent our bases yet, send them now.
+            if (!prev) {
+              const myBases = role === 'alice' ? currentState.aliceBases : currentState.bobBases;
+              connection.sendMessage({ type: 'announce_bases', bases: myBases });
+            }
+            return true;
+          });
+          
+          // Perform sifting
+          const myBases = role === 'alice' ? currentState.aliceBases : currentState.bobBases;
+          const keepMask = performSifting(myBases, data.bases);
+          const myBits = role === 'alice' ? currentState.aliceBits : currentState.bobOutcomes;
+          const siftedKey = extractSiftedKey(myBits, keepMask);
+          setState(prev => ({ 
+            ...prev, 
+            bobBases: role === 'alice' ? data.bases : prev.bobBases, 
+            keepMask, 
+            siftedKey, 
+            step: 'qber' 
+          }));
+          if (role === 'bob') {
+            connection.sendMessage({ type: 'sifting_result', keepMask });
+          }
+          toast({ title: 'Sifting Complete', description: `Kept ${siftedKey.length} bits` });
           break;
 
         case 'sifting_result':
-          handleSiftingResult(data.keepMask);
+          if (role === 'alice') {
+            const siftedKey = extractSiftedKey(currentState.aliceBits, data.keepMask);
+            setState(prev => ({ ...prev, step: 'qber', siftedKey, keepMask: data.keepMask }));
+            toast({ title: 'Sifting Complete', description: 'Ready for QBER check.' });
+          }
           break;
 
         case 'qber_request':
-          handleQBERRequest(data.sampleIndices, data.sampleBits);
+          if (role === 'bob') {
+            const bobSiftedKey = extractSiftedKey(currentState.bobOutcomes, currentState.keepMask);
+            console.log('Bob QBER - Sifted key length:', bobSiftedKey.length);
+            console.log('Bob QBER - Sample indices:', data.sampleIndices);
+            
+            const bobSample = data.sampleIndices
+              .map(i => bobSiftedKey[i])
+              .filter((bit): bit is Bit => bit !== undefined);
+
+            console.log('Bob QBER - Alice sample:', data.sampleBits);
+            console.log('Bob QBER - Bob sample:', bobSample);
+
+            if (bobSample.length !== data.sampleIndices.length) {
+              handleAbort('Insufficient sifted bits for QBER estimation.');
+              break;
+            }
+
+            connection.sendMessage({ type: 'qber_response', sampleBits: bobSample });
+
+            const qber = calculateQBER(data.sampleBits, bobSample);
+            console.log('Bob QBER calculated:', qber);
+
+            if (qber > currentConfig.qberThreshold) {
+              handleAbort(`QBER of ${(qber * 100).toFixed(2)}% exceeds threshold.`);
+            } else {
+              const keyAfterSampleRemoval = removeSampledBits(bobSiftedKey, data.sampleIndices);
+              setState(prev => ({ ...prev, step: 'error-correction', qber, siftedKey: keyAfterSampleRemoval }));
+              toast({ title: 'QBER Acceptable', description: `QBER: ${(qber * 100).toFixed(2)}%` });
+            }
+          }
           break;
 
         case 'qber_response':
-          handleQBERResponse(data.sampleBits);
+          if (role === 'alice') {
+            const aliceSiftedKey = extractSiftedKey(currentState.aliceBits, currentState.keepMask);
+            console.log('Alice QBER - Sifted key length:', aliceSiftedKey.length);
+            console.log('Alice QBER - Sample indices:', currentState.sampleIndices);
+            
+            const aliceSample = currentState.sampleIndices
+              .map(i => aliceSiftedKey[i])
+              .filter((bit): bit is Bit => bit !== undefined);
+
+            console.log('Alice QBER - Alice sample:', aliceSample);
+            console.log('Alice QBER - Bob sample:', data.sampleBits);
+
+            if (aliceSample.length !== currentState.sampleIndices.length) {
+              handleAbort('Insufficient sifted bits for QBER evaluation.');
+              break;
+            }
+
+            const qber = calculateQBER(aliceSample, data.sampleBits);
+            console.log('Alice QBER calculated:', qber);
+
+            if (qber > currentConfig.qberThreshold) {
+              handleAbort(`QBER of ${(qber * 100).toFixed(2)}% exceeds threshold.`);
+            } else {
+              const keyAfterSampleRemoval = removeSampledBits(aliceSiftedKey, currentState.sampleIndices);
+              setState(prev => ({ ...prev, step: 'error-correction', qber, siftedKey: keyAfterSampleRemoval }));
+              toast({ title: 'QBER Acceptable', description: `QBER: ${(qber * 100).toFixed(2)}%` });
+            }
+          }
           break;
 
-        case 'accept_or_abort':
-          handleAcceptOrAbort(data.accepted, data.qber);
-          break;
 
-        case 'error_correction':
-          // Handle error correction messages
+        case 'error_correction_stats':
+          if (role === 'bob') {
+            // Bob needs to use the corrected key from Alice's error correction
+            setState(prev => ({ 
+              ...prev, 
+              ecStats: data.stats, 
+              siftedKey: data.stats.correctedKey, // Use Alice's corrected key
+              step: 'privacy-amplification' 
+            }));
+            toast({ title: 'Error Correction Complete', description: 'Ready for privacy amplification.' });
+          }
           break;
 
         case 'privacy_amplification':
@@ -123,7 +233,37 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
           break;
 
         case 'final_key_commitment':
-          handleKeyCommitment(data.commitment);
+          if (role === 'bob') {
+            // Bob needs to compute his own finalKey from his sifted key
+            const paStats = performPrivacyAmplification(currentState.siftedKey, currentState.qber ?? 0, currentState.ecStats?.bitsRevealed ?? 0);
+            const finalKey = currentState.siftedKey.slice(0, paStats.outputLength);
+            
+            const match = verifyCommitment(finalKey, data.commitment);
+
+            connection.sendMessage({
+              type: 'final_key_confirmed',
+              match,
+            });
+
+            if (match) {
+              setState(prev => ({ ...prev, paStats, finalKey, step: 'success' }));
+              toast({
+                title: 'Key Verified!',
+                description: 'Keys match. You can now proceed to secure chat.',
+              });
+            } else {
+              setState(prev => ({
+                ...prev,
+                step: 'aborted',
+                abortReason: 'Key verification failed',
+              }));
+              toast({
+                title: 'Protocol Aborted',
+                description: 'Key verification failed',
+                variant: 'destructive',
+              });
+            }
+          }
           break;
 
         case 'final_key_confirmed':
@@ -131,11 +271,8 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
             setState(prev => ({ ...prev, step: 'success' }));
             toast({
               title: 'Key Exchange Successful!',
-              description: 'Secure key established. Starting chat...',
+              description: 'Secure key established. Choose how to proceed.',
             });
-            setTimeout(() => {
-              setState(prev => ({ ...prev, step: 'chat' }));
-            }, 2000);
           } else {
             handleAbort('Key commitment mismatch');
           }
@@ -144,320 +281,113 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
     };
 
     connection.onMessage(handleMessage);
-  }, [role, connection, toast]);
+  }, [role, connection]);
 
-  // Alice: Prepare qubits
   const handlePrepare = useCallback(() => {
-    if (role !== 'alice') return;
+    if (role !== 'alice' || state.step !== 'idle') return;
     setLoading(true);
-
     setTimeout(() => {
       const aliceBits = simulator.generateRandomBits(config.numQubits);
       const aliceBases = simulator.generateRandomBases(config.numQubits);
-
-      setState(prev => ({
-        ...prev,
-        step: 'preparation',
-        aliceBits,
-        aliceBases,
-      }));
-
-      connection.sendMessage({
-        type: 'prepared',
-        numQubits: config.numQubits,
-        // In a real quantum channel, qubits would be sent.
-        // For simulation, we send the classical information Bob needs to simulate the measurement.
-        aliceBits: aliceBits,
-        aliceBases: aliceBases,
-      });
-
+      setState(prev => ({ ...prev, step: 'preparation', aliceBits, aliceBases, bobBases: [], bobOutcomes: [] }));
+      connection.sendMessage({ type: 'prepared', numQubits: config.numQubits, aliceBits, aliceBases });
       setLoading(false);
-      toast({
-        title: 'Qubits Prepared',
-        description: `${config.numQubits} qubits encoded and sent`,
-      });
+      toast({ title: 'Qubits Prepared', description: `${config.numQubits} qubits encoded and sent` });
     }, 1000);
-  }, [role, config.numQubits, simulator, connection, toast]);
+  }, [role, config.numQubits, simulator, connection, state.step]);
 
-  // Bob: Measure qubits
   const handleMeasure = useCallback(() => {
-    if (role !== 'bob' || !peerReady) return;
+    if (role !== 'bob' || !peerReady || state.step !== 'idle') return;
     setLoading(true);
-
     setTimeout(() => {
       const bobBases = simulator.generateRandomBases(config.numQubits);
-      
-      // In a real scenario, Alice would have sent quantum states.
-      // Here, we simulate the entire transmission at once for Bob's measurement step.
-      const transmissionResult = simulator.simulateTransmission(
-        state.aliceBits, // This needs to be available; requires a state change or message
-        state.aliceBases,
-        bobBases,
-        config.eveEnabled
-      );
-
-      setState(prev => ({
-        ...prev,
-        step: 'measurement',
-        bobBases,
-        bobOutcomes: transmissionResult.bobOutcomes,
-        ...(transmissionResult.eveBases && { eveBases: transmissionResult.eveBases }),
-        ...(transmissionResult.eveOutcomes && { eveOutcomes: transmissionResult.eveOutcomes }),
-      }));
-
-      connection.sendMessage({
-        type: 'measured',
-        numQubits: config.numQubits,
-      });
-
+      const transmissionResult = simulator.simulateTransmission(state.aliceBits, state.aliceBases, bobBases, config.eveEnabled);
+      const eveBases = transmissionResult.eveBases;
+      const eveOutcomes = transmissionResult.eveOutcomes;
+      const bobOutcomes = transmissionResult.bobOutcomes;
+      setState(prev => ({ ...prev, step: 'measurement', bobBases, bobOutcomes, eveBases, eveOutcomes }));
+      connection.sendMessage({ type: 'measured', numQubits: config.numQubits });
       setLoading(false);
-      toast({
-        title: 'Qubits Measured',
-        description: `${config.numQubits} qubits measured`,
-      });
+      toast({ title: 'Qubits Measured', description: `${config.numQubits} qubits measured` });
     }, 1000);
-  }, [role, peerReady, config.numQubits, simulator, connection, toast]);
+  }, [role, peerReady, config, simulator, connection, state.aliceBits, state.aliceBases, state.step]);
 
-  // Sifting: Exchange bases
   const handleSifting = useCallback(() => {
+    if (state.step !== 'sifting' || hasSentBases) return;
     setLoading(true);
-
     setTimeout(() => {
-      if (role === 'alice') {
-        // Alice announces her bases
-        connection.sendMessage({
-          type: 'announce_bases',
-          bases: state.aliceBases,
-        });
-      } else {
-        // Bob announces his bases
-        connection.sendMessage({
-          type: 'announce_bases',
-          bases: state.bobBases,
-        });
-      }
+      const bases = role === 'alice' ? state.aliceBases : state.bobBases;
+      connection.sendMessage({ type: 'announce_bases', bases });
+      setHasSentBases(true);
       setLoading(false);
     }, 500);
-  }, [role, state.aliceBases, state.bobBases, connection]);
+  }, [role, state.step, state.aliceBases, state.bobBases, connection, hasSentBases]);
 
-  const handleBasesReceived = (peerBases: Basis[]) => {
-    setState(prev => {
-      const myBases = role === 'alice' ? prev.aliceBases : prev.bobBases;
-      const keepMask = performSifting(myBases, peerBases);
-      const myBits = role === 'alice' ? prev.aliceBits : prev.bobOutcomes;
-      const siftedKey = extractSiftedKey(myBits, keepMask);
-
-      if (role === 'alice') {
-        // Alice sends sifting result to Bob
-        connection.sendMessage({
-          type: 'sifting_result',
-          keepMask,
-        });
-      }
-
-      toast({
-        title: 'Sifting Complete',
-        description: `Kept ${siftedKey.length} bits from ${myBits.length}`,
-      });
-
-      return {
-        ...prev,
-        keepMask,
-        siftedKey,
-        step: 'qber',
-      };
-    });
-  };
-
-  const handleSiftingResult = (keepMask: boolean[]) => {
-    if (role === 'bob') {
-      setState(prev => {
-        const siftedKey = extractSiftedKey(prev.bobOutcomes, keepMask);
-        return {
-          ...prev,
-          keepMask,
-          siftedKey,
-          step: 'qber',
-        };
-      });
-    }
-  };
-
-  // QBER Estimation
   const handleQBEREstimation = useCallback(() => {
-    if (role !== 'alice') return;
-    setLoading(true);
-
-    setTimeout(() => {
-      const sampleIndices = selectRandomSample(state.siftedKey.length, config.sampleSize);
-      const sampleBits = sampleIndices.map(i => state.siftedKey[i]);
-
-      setState(prev => ({ ...prev, sampleIndices }));
-
-      connection.sendMessage({
-        type: 'qber_request',
-        sampleIndices,
-        sampleBits,
+    const currentState = stateRef.current;
+    if (role !== 'alice' || currentState.step !== 'qber') return;
+    if (currentState.siftedKey.length === 0) {
+      toastRef.current({ 
+        title: 'Error', 
+        description: 'No sifted key available for QBER estimation',
+        variant: 'destructive'
       });
-
-      setLoading(false);
-    }, 500);
-  }, [role, state.siftedKey, config.sampleSize, connection]);
-
-  const handleQBERRequest = (sampleIndices: number[], aliceSample: Bit[]) => {
-    if (role !== 'bob') return;
-
-    const bobSample = sampleIndices.map(i => state.siftedKey[i]);
-
-    connection.sendMessage({
-      type: 'qber_response',
-      sampleBits: bobSample,
-    });
-
+      return;
+    }
+    setLoading(true);
+    const sampleIndices = selectRandomSample(currentState.siftedKey.length, config.sampleSize);
+    const sampleBits = sampleIndices.map(i => currentState.siftedKey[i]);
     setState(prev => ({ ...prev, sampleIndices }));
-  };
+    connection.sendMessage({ type: 'qber_request', sampleIndices, sampleBits });
+    toastRef.current({ title: 'QBER sample sent' });
+    setLoading(false);
+  }, [role, config.sampleSize, connection]);
 
-  const handleQBERResponse = (bobSample: Bit[]) => {
-    if (role !== 'alice') return;
-
-    const aliceSample = state.sampleIndices.map(i => state.siftedKey[i]);
-    const qber = calculateQBER(aliceSample, bobSample);
-
-    setState(prev => ({ ...prev, qber }));
-
-    const accepted = qber <= config.qberThreshold;
-
-    connection.sendMessage({
-      type: 'accept_or_abort',
-      accepted,
-      qber,
-    });
-
-    if (!accepted) {
-      handleAbort(`QBER too high: ${(qber * 100).toFixed(2)}% > ${(config.qberThreshold * 100).toFixed(2)}%`);
-    } else {
-      toast({
-        title: 'QBER Acceptable',
-        description: `Error rate: ${(qber * 100).toFixed(2)}%`,
-      });
-      setState(prev => ({ ...prev, step: 'error-correction' }));
-    }
-  };
-
-  const handleAcceptOrAbort = (accepted: boolean, qber: number) => {
-    if (role !== 'bob') return;
-
-    setState(prev => ({ ...prev, qber }));
-
-    if (!accepted) {
-      handleAbort(`QBER too high: ${(qber * 100).toFixed(2)}%`);
-    } else {
-      setState(prev => ({ ...prev, step: 'error-correction' }));
-    }
-  };
-
-  // Error Correction
   const handleErrorCorrection = useCallback(() => {
+    const currentState = stateRef.current;
+    if (currentState.step !== 'error-correction') return;
     setLoading(true);
-
-    setTimeout(() => {
-      const myKey = state.siftedKey;
-      const remainingKey = removeSampledBits(myKey, state.sampleIndices);
-
-      // Simulate error correction (in real scenario, exchange parity bits)
-      const ecStats = performErrorCorrection(remainingKey, remainingKey, state.qber || 0);
-
-      setState(prev => ({
-        ...prev,
-        ecStats,
-        siftedKey: ecStats.correctedKey,
-        step: 'privacy-amplification',
-      }));
-
-      toast({
-        title: 'Error Correction Complete',
-        description: `Corrected ${ecStats.initialErrors} errors`,
-      });
-
-      setLoading(false);
-    }, 1000);
-  }, [state.siftedKey, state.sampleIndices, state.qber, toast]);
-
-  // Privacy Amplification
-  const handlePrivacyAmplification = useCallback(() => {
-    setLoading(true);
-
-    setTimeout(() => {
-      const paStats = performPrivacyAmplification(
-        state.siftedKey,
-        state.qber || 0,
-        state.ecStats?.bitsRevealed || 0
-      );
-
-      const finalKey = state.siftedKey.slice(0, paStats.outputLength);
-
-      setState(prev => ({
-        ...prev,
-        paStats,
-        finalKey,
-      }));
-
-      // Generate and exchange commitment
-      const commitment = generateCommitment(finalKey);
-
-      if (role === 'alice') {
-        connection.sendMessage({
-          type: 'final_key_commitment',
-          commitment,
-        });
-      }
-
-      toast({
-        title: 'Privacy Amplification Complete',
-        description: `Final key: ${paStats.outputLength} bits`,
-      });
-
-      setLoading(false);
-    }, 1000);
-  }, [role, state.siftedKey, state.qber, state.ecStats, connection, toast]);
-
-  const handleKeyCommitment = (commitment: string) => {
-    if (role !== 'bob') return;
-
-    const match = verifyCommitment(state.finalKey, commitment);
-
-    connection.sendMessage({
-      type: 'final_key_confirmed',
-      match,
-    });
-
-    if (match) {
-      setState(prev => ({ ...prev, step: 'success' }));
-      toast({
-        title: 'Key Verified!',
-        description: 'Keys match. Starting secure chat...',
-      });
-      setTimeout(() => {
-        setState(prev => ({ ...prev, step: 'chat' }));
-      }, 2000);
-    } else {
-      handleAbort('Key verification failed');
+    if (role === 'alice') {
+      const bobSiftedKey = extractSiftedKey(currentState.bobOutcomes, currentState.keepMask);
+      const keyForEC = removeSampledBits(bobSiftedKey, currentState.sampleIndices);
+      const ecStats = performErrorCorrection(currentState.siftedKey, keyForEC, currentState.qber ?? 0);
+      setState(prev => ({ ...prev, ecStats, siftedKey: ecStats.correctedKey, step: 'privacy-amplification' }));
+      connection.sendMessage({ type: 'error_correction_stats', stats: ecStats });
+      toastRef.current({ title: 'Error Correction Complete' });
     }
-  };
+    setLoading(false);
+  }, [role, connection]);
 
-  const handleAbort = (reason: string) => {
+  const handlePrivacyAmplification = useCallback(() => {
+    const currentState = stateRef.current;
+    if (currentState.step !== 'privacy-amplification') return;
+    setLoading(true);
+    const paStats = performPrivacyAmplification(currentState.siftedKey, currentState.qber ?? 0, currentState.ecStats?.bitsRevealed ?? 0);
+    const finalKey = currentState.siftedKey.slice(0, paStats.outputLength);
+    const commitment = generateCommitment(finalKey);
+    setState(prev => ({ ...prev, paStats, finalKey, step: 'success' }));
+    connection.sendMessage({ type: 'final_key_commitment', commitment });
+    toastRef.current({ title: 'Privacy Amplification Complete' });
+    setLoading(false);
+  }, [connection]);
+
+  const handleEnterChat = useCallback(() => {
+    setState(prev => ({ ...prev, step: 'chat' }));
+  }, []);
+
+  const handleAbort = useCallback((reason: string) => {
     setState(prev => ({
       ...prev,
       step: 'aborted',
       abortReason: reason,
     }));
 
-    toast({
+    toastRef.current({
       title: 'Protocol Aborted',
       description: reason,
       variant: 'destructive',
     });
-  };
+  }, []);
 
   const handleReset = () => {
     setState({
@@ -476,6 +406,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
       abortReason: null,
     });
     setPeerReady(false);
+    setHasSentBases(false);
   };
 
   if (state.step === 'chat') {
@@ -661,10 +592,21 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
                     initial="hidden"
                     animate="visible"
                   >
-                    {state.bobOutcomes.slice(0, 50).map((bit, i) => (
-                      <Qubit key={i} bit={bit} basis={state.bobBases[i]} />
-                    ))}
+                    {state.bobOutcomes.slice(0, 50).map((bit, i) => {
+                      const isMatch = state.aliceBases[i] === state.bobBases[i];
+                      return (
+                        <Qubit
+                          key={i}
+                          bit={bit}
+                          basis={state.bobBases[i]}
+                          isMismatched={!isMatch} // Highlight if bases DON'T match
+                        />
+                      );
+                    })}
                   </motion.div>
+                  <p className="text-xs text-muted-foreground pt-2">
+                    <span className="text-destructive font-bold">Red</span> qubits indicate where Bob's basis choice was incorrect. These will be discarded during sifting.
+                  </p>
                 </div>
               )}
 
@@ -806,26 +748,48 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
             )}
 
             {state.step === 'success' && (
-              <Alert>
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Key exchange successful! Starting secure chat...
-                </AlertDescription>
-              </Alert>
+              <div className="space-y-3">
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Key exchange successful! Choose how you'd like to continue.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button className="w-full sm:flex-1" onClick={handleEnterChat}>
+                    Enter Secure Chat
+                  </Button>
+                  <Button className="w-full sm:flex-1" variant="outline" asChild>
+                    <Link to="/">
+                      Return Home
+                    </Link>
+                  </Button>
+                  <Button className="w-full sm:flex-1" variant="secondary" onClick={handleReset}>
+                    Start New Session
+                  </Button>
+                </div>
+              </div>
             )}
 
             {state.step === 'aborted' && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Protocol aborted: {state.abortReason}
-                </AlertDescription>
-              </Alert>
+              <>
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Protocol aborted: {state.abortReason}
+                  </AlertDescription>
+                </Alert>
+                <Button onClick={handleReset} className="w-full">
+                  Start New Session
+                </Button>
+              </>
             )}
 
-            {(state.step === 'aborted' || state.step === 'success') && (
-              <Button onClick={handleReset} className="w-full">
-                Start New Session
+            {state.step === 'idle' && (
+              <Button onClick={handleReset} className="w-full" variant="outline" asChild>
+                <Link to="/">
+                  Return Home
+                </Link>
               </Button>
             )}
           </CardContent>

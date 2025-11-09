@@ -65,6 +65,7 @@ export type BB84Message =
   | { type: 'qber_response'; sampleBits: Bit[] }
   | { type: 'accept_or_abort'; accepted: boolean; qber: number }
   | { type: 'error_correction'; parityBits: number[]; blockIndex: number }
+  | { type: 'error_correction_stats'; stats: ErrorCorrectionStats }
   | { type: 'privacy_amplification'; hashSeed: number[] }
   | { type: 'final_key_commitment'; commitment: string }
   | { type: 'final_key_confirmed'; match: boolean }
