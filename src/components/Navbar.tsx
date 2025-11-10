@@ -1,15 +1,28 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const isHomePage = location.pathname === '/';
 
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+  const handleNavClick = (sectionId: string) => {
+    if (isHomePage) {
+      // Already on homepage, just scroll
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      // Navigate to homepage first, then scroll
+      navigate('/');
+      setTimeout(() => {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
     }
   };
 
@@ -21,34 +34,39 @@ const Navbar = () => {
           <span className="font-bold text-lg">Quantum Cipher Chat</span>
         </Link>
         
-        {isHomePage && (
-          <nav className="hidden md:flex items-center space-x-6">
-            <Button
-              variant="ghost"
-              onClick={() => scrollToSection('features')}
-              className="text-sm font-medium"
-            >
-              Features
+        <nav className="hidden md:flex items-center space-x-6">
+          <Button
+            variant="ghost"
+            onClick={() => handleNavClick('features')}
+            className="text-sm font-medium"
+          >
+            Features
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => handleNavClick('about')}
+            className="text-sm font-medium"
+          >
+            About
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => handleNavClick('how-it-works')}
+            className="text-sm font-medium"
+          >
+            How It Works
+          </Button>
+          {!isHomePage && (
+            <Button asChild variant="default" size="sm">
+              <Link to="/">Home</Link>
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => scrollToSection('about')}
-              className="text-sm font-medium"
-            >
-              About
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => scrollToSection('how-it-works')}
-              className="text-sm font-medium"
-            >
-              How It Works
-            </Button>
+          )}
+          {isHomePage && (
             <Button asChild variant="default" size="sm">
               <Link to="/room">Get Started</Link>
             </Button>
-          </nav>
-        )}
+          )}
+        </nav>
       </div>
     </header>
   );
