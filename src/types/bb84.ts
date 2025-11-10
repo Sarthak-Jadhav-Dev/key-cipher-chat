@@ -41,6 +41,7 @@ export interface PrivacyAmplificationStats {
   inputLength: number;
   outputLength: number;
   compressionRatio: number;
+  amplifiedKey: Bit[];
 }
 
 export interface RunSummary {

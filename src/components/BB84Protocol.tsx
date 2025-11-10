@@ -236,7 +236,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
           if (role === 'bob') {
             // Bob needs to compute his own finalKey from his sifted key
             const paStats = performPrivacyAmplification(currentState.siftedKey, currentState.qber ?? 0, currentState.ecStats?.bitsRevealed ?? 0);
-            const finalKey = currentState.siftedKey.slice(0, paStats.outputLength);
+            const finalKey = paStats.amplifiedKey;
             
             const match = verifyCommitment(finalKey, data.commitment);
 
@@ -363,7 +363,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
     if (currentState.step !== 'privacy-amplification' || role !== 'alice') return;
     setLoading(true);
     const paStats = performPrivacyAmplification(currentState.siftedKey, currentState.qber ?? 0, currentState.ecStats?.bitsRevealed ?? 0);
-    const finalKey = currentState.siftedKey.slice(0, paStats.outputLength);
+    const finalKey = paStats.amplifiedKey;
     const commitment = generateCommitment(finalKey);
     setState(prev => ({ ...prev, paStats, finalKey, step: 'success' }));
     connection.sendMessage({ type: 'final_key_commitment', commitment });

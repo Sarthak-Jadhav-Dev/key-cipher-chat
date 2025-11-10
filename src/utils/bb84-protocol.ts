@@ -183,6 +183,7 @@ export function performPrivacyAmplification(
     inputLength,
     outputLength,
     compressionRatio: outputLength / inputLength,
+    amplifiedKey,
   };
 }
 
