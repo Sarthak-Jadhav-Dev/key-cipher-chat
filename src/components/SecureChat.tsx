@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Lock, Clock } from 'lucide-react';
+import { Send, Lock, Clock, Home } from 'lucide-react';
 import { Role } from '@/types/quantum';
 import { Bit, BB84Message } from '@/types/bb84';
 import { KeyCipher } from '@/utils/encryption';
 import { WebRTCConnection } from '@/utils/webrtc';
 import { useToast } from '@/hooks/use-toast';
+import { Link } from 'react-router-dom';
 
 interface SecureChatProps {
   role: Role;
@@ -228,12 +229,21 @@ const SecureChat = ({ role, connection, finalKey, onEnd }: SecureChatProps) => {
             <span>{inputText.length}/200</span>
           </div>
 
+          <div className="flex gap-2 pt-2">
+            <Button onClick={handleEndChat} variant="outline" className="flex-1">
+              Return to Protocol
+            </Button>
+            <Button asChild variant="secondary" className="flex-1">
+              <Link to="/">
+                <Home className="h-4 w-4 mr-2" />
+                Home
+              </Link>
+            </Button>
+          </div>
+
           {timeRemaining === 0 && (
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-2">Session expired</p>
-              <Button onClick={handleEndChat} variant="outline">
-                Return to Protocol
-              </Button>
+              <p className="text-sm text-muted-foreground">Session expired</p>
             </div>
           )}
         </CardContent>

@@ -372,8 +372,16 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
   }, [connection]);
 
   const handleEnterChat = useCallback(() => {
+    if (state.finalKey.length === 0) {
+      toast({
+        title: 'Key Not Ready',
+        description: 'Please wait for the final key to be generated',
+        variant: 'destructive',
+      });
+      return;
+    }
     setState(prev => ({ ...prev, step: 'chat' }));
-  }, []);
+  }, [state.finalKey.length, toast]);
 
   const handleAbort = useCallback((reason: string) => {
     setState(prev => ({
