@@ -360,7 +360,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
 
   const handlePrivacyAmplification = useCallback(() => {
     const currentState = stateRef.current;
-    if (currentState.step !== 'privacy-amplification') return;
+    if (currentState.step !== 'privacy-amplification' || role !== 'alice') return;
     setLoading(true);
     const paStats = performPrivacyAmplification(currentState.siftedKey, currentState.qber ?? 0, currentState.ecStats?.bitsRevealed ?? 0);
     const finalKey = currentState.siftedKey.slice(0, paStats.outputLength);
@@ -369,7 +369,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
     connection.sendMessage({ type: 'final_key_commitment', commitment });
     toastRef.current({ title: 'Privacy Amplification Complete' });
     setLoading(false);
-  }, [connection]);
+  }, [role, connection]);
 
   const handleEnterChat = useCallback(() => {
     if (state.finalKey.length === 0) {
@@ -704,7 +704,7 @@ const BB84Protocol = ({ role, connection }: BB84ProtocolProps) => {
 
               <Button
                 onClick={handlePrivacyAmplification}
-                disabled={state.step !== 'privacy-amplification' || loading}
+                disabled={state.step !== 'privacy-amplification' || role !== 'alice' || loading}
                 variant={state.step === 'privacy-amplification' ? 'default' : 'outline'}
               >
                 Privacy Amplification
